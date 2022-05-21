@@ -1,10 +1,20 @@
-import pandas as pd
+import os
+import os.path as path
+import shutil
 import time
+from msilib.schema import CreateFolder
 import numpy as np
+import pandas as pd
+from pydub import AudioSegment
 
 start = time.process_time()
 
-df = pd.read_csv("..\\dataset\\kaggle covid-19 cough audio classification\\archive\\metadata_compiled.csv")
+metadataFileLocation = "..\\dataset\\kaggle covid-19 cough audio classification\\archive\\metadata_compiled.csv"
+archiveFilesLocation = "..\\dataset\\kaggle covid-19 cough audio classification\\archive\\"
+selectionFolderName = "selection"
+included_extensions = ["ogg","webm"]
+
+df = pd.read_csv(metadataFileLocation)
 print("Load csv (s): ", round(time.process_time() - start, 2))
 
 pd.set_option('display.max_columns', None)
@@ -12,61 +22,61 @@ pd.set_option('display.max_columns', None)
 
 print("Items: ", len(df))
 
-def printValues(df):
-    print("status", df.status.unique())
-    print("quality_1", df.quality_1.unique())
-    print("quality_2", df.quality_2.unique())
-    print("quality_3", df.quality_3.unique())
-    print("quality_4", df.quality_4.unique())
-    print("cough_type_1", df.cough_type_1.unique())
-    print("cough_type_2", df.cough_type_2.unique())
-    print("cough_type_3", df.cough_type_3.unique())
-    print("cough_type_4", df.cough_type_4.unique())
-    print("dyspnea_1", df.dyspnea_1.unique())
-    print("dyspnea_2", df.dyspnea_2.unique())
-    print("dyspnea_3", df.dyspnea_3.unique())
-    print("dyspnea_4", df.dyspnea_4.unique())
-    print("cough_type_1", df.cough_type_1.unique())
-    print("cough_type_2", df.cough_type_2.unique())
-    print("cough_type_3", df.cough_type_3.unique())
-    print("cough_type_4", df.cough_type_4.unique())
-    print("choking_1", df.choking_1.unique())
-    print("choking_2", df.choking_2.unique())
-    print("choking_3", df.choking_3.unique())
-    print("choking_4", df.choking_4.unique())
-    print("congestion_1", df.congestion_1.unique())
-    print("congestion_2", df.congestion_2.unique())
-    print("congestion_3", df.congestion_3.unique())
-    print("congestion_4", df.congestion_4.unique())
-    print("cough_type_1", df.cough_type_1.unique())
-    print("cough_type_2", df.cough_type_2.unique())
-    print("cough_type_3", df.cough_type_3.unique())
-    print("cough_type_4", df.cough_type_4.unique())
-    print("diagnosis_1", df.diagnosis_1.unique())
-    print("diagnosis_2", df.diagnosis_2.unique())
-    print("diagnosis_3", df.diagnosis_3.unique())
-    print("diagnosis_4", df.diagnosis_4.unique())
-    print("nothing_1", df.nothing_1.unique())
-    print("nothing_2", df.nothing_2.unique())
-    print("nothing_3", df.nothing_3.unique())
-    print("nothing_4", df.nothing_4.unique())
-    print("quality_1", df.quality_1.unique())
-    print("quality_2", df.quality_2.unique())
-    print("quality_3", df.quality_3.unique())
-    print("quality_4", df.quality_4.unique())
-    print("respiratory_condition", df.respiratory_condition.unique())
-    print("severity_1", df.severity_1.unique())
-    print("severity_2", df.severity_2.unique())
-    print("severity_3", df.severity_3.unique())
-    print("severity_4", df.severity_4.unique())
-    print("stridor_1", df.stridor_1.unique())
-    print("stridor_2", df.stridor_2.unique())
-    print("stridor_3", df.stridor_3.unique())
-    print("stridor_4", df.stridor_4.unique())
-    print("wheezing_1", df.wheezing_1.unique())
-    print("wheezing_2", df.wheezing_2.unique())
-    print("wheezing_3", df.wheezing_3.unique())
-    print("wheezing_4", df.wheezing_4.unique())
+def printValues(dataFrame):
+    print("status", dataFrame.status.unique())
+    print("quality_1", dataFrame.quality_1.unique())
+    print("quality_2", dataFrame.quality_2.unique())
+    print("quality_3", dataFrame.quality_3.unique())
+    print("quality_4", dataFrame.quality_4.unique())
+    print("cough_type_1", dataFrame.cough_type_1.unique())
+    print("cough_type_2", dataFrame.cough_type_2.unique())
+    print("cough_type_3", dataFrame.cough_type_3.unique())
+    print("cough_type_4", dataFrame.cough_type_4.unique())
+    print("dyspnea_1", dataFrame.dyspnea_1.unique())
+    print("dyspnea_2", dataFrame.dyspnea_2.unique())
+    print("dyspnea_3", dataFrame.dyspnea_3.unique())
+    print("dyspnea_4", dataFrame.dyspnea_4.unique())
+    print("cough_type_1", dataFrame.cough_type_1.unique())
+    print("cough_type_2", dataFrame.cough_type_2.unique())
+    print("cough_type_3", dataFrame.cough_type_3.unique())
+    print("cough_type_4", dataFrame.cough_type_4.unique())
+    print("choking_1", dataFrame.choking_1.unique())
+    print("choking_2", dataFrame.choking_2.unique())
+    print("choking_3", dataFrame.choking_3.unique())
+    print("choking_4", dataFrame.choking_4.unique())
+    print("congestion_1", dataFrame.congestion_1.unique())
+    print("congestion_2", dataFrame.congestion_2.unique())
+    print("congestion_3", dataFrame.congestion_3.unique())
+    print("congestion_4", dataFrame.congestion_4.unique())
+    print("cough_type_1", dataFrame.cough_type_1.unique())
+    print("cough_type_2", dataFrame.cough_type_2.unique())
+    print("cough_type_3", dataFrame.cough_type_3.unique())
+    print("cough_type_4", dataFrame.cough_type_4.unique())
+    print("diagnosis_1", dataFrame.diagnosis_1.unique())
+    print("diagnosis_2", dataFrame.diagnosis_2.unique())
+    print("diagnosis_3", dataFrame.diagnosis_3.unique())
+    print("diagnosis_4", dataFrame.diagnosis_4.unique())
+    print("nothing_1", dataFrame.nothing_1.unique())
+    print("nothing_2", dataFrame.nothing_2.unique())
+    print("nothing_3", dataFrame.nothing_3.unique())
+    print("nothing_4", dataFrame.nothing_4.unique())
+    print("quality_1", dataFrame.quality_1.unique())
+    print("quality_2", dataFrame.quality_2.unique())
+    print("quality_3", dataFrame.quality_3.unique())
+    print("quality_4", dataFrame.quality_4.unique())
+    print("respiratory_condition", dataFrame.respiratory_condition.unique())
+    print("severity_1", dataFrame.severity_1.unique())
+    print("severity_2", dataFrame.severity_2.unique())
+    print("severity_3", dataFrame.severity_3.unique())
+    print("severity_4", dataFrame.severity_4.unique())
+    print("stridor_1", dataFrame.stridor_1.unique())
+    print("stridor_2", dataFrame.stridor_2.unique())
+    print("stridor_3", dataFrame.stridor_3.unique())
+    print("stridor_4", dataFrame.stridor_4.unique())
+    print("wheezing_1", dataFrame.wheezing_1.unique())
+    print("wheezing_2", dataFrame.wheezing_2.unique())
+    print("wheezing_3", dataFrame.wheezing_3.unique())
+    print("wheezing_4", dataFrame.wheezing_4.unique())
 
 #printValues(df)
 df = df[df["cough_detected"] >= 0.99]
@@ -96,6 +106,41 @@ cough_type_options = ["dry", np.nan]
 df = df[df["cough_type_1"].isin(cough_type_options) & df["cough_type_2"].isin(cough_type_options) & df["cough_type_3"].isin(cough_type_options) & df["cough_type_4"].isin(cough_type_options)]
 print("\ncough_type: ", cough_type_options, len(df))
 
-printValues(df)
+#printValues(df)
 #print(sorted(df))
-print("\n", df.head(15))
+#print("\n", df.head(15))
+
+# Extract files
+randomRecordings = df["uuid"].sample(200)
+
+# Create folder for selection
+try:
+    shutil.rmtree(archiveFilesLocation + selectionFolderName)
+except OSError as e:
+    print("Error: %s : %s" % (archiveFilesLocation + selectionFolderName, e.strerror))
+
+if (not path.exists(archiveFilesLocation + selectionFolderName)):
+    os.makedirs(archiveFilesLocation + selectionFolderName)
+
+archive_file_list = [fn for fn in os.listdir(archiveFilesLocation)
+                        if any(fn.endswith(ext) for ext in included_extensions)]
+
+def convertFile(recordingIdStr):
+    file_name = [fn for fn in archive_file_list if fn.startswith(recordingIdStr)][0]
+    file_path = archiveFilesLocation + file_name
+    if (not path.exists(file_path)):
+        raise Exception("Missing file from archive: ", file_path)
+    try:
+        #shutil.copy2(file_path, archiveFilesLocation+selectionFolderName)
+        sound = AudioSegment.from_file(file_path)
+        copied_file = sound.export(archiveFilesLocation+selectionFolderName + "\\" + recordingIdStr + ".wav", format="wav").file_name
+    except:
+        print("Convert failed: ", file_path)
+    else:
+        print(copied_file)
+
+for recordingId in randomRecordings:
+    convertFile(recordingId)
+
+print("Converted # files: ", len(randomRecordings))
+print("Runtime (s): ", round(time.process_time() - start, 2))

@@ -1,0 +1,1 @@
+arduino-cli compile -b arduino:mbed:nano33ble
