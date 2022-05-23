@@ -1,0 +1,4 @@
+{
+    "arduino.logLevel": "verbose",
+    "arduino.useArduinoCli": true
+}
