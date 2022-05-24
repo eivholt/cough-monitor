@@ -1,4 +1,5 @@
 {
     "arduino.logLevel": "verbose",
-    "arduino.useArduinoCli": true
+    "arduino.useArduinoCli": false,
+    "arduino.path": "C:\\Program Files (x86)\\Arduino"
 }

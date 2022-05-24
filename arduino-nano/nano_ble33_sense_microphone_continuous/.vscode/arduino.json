@@ -1,5 +1,5 @@
 {
     "board": "arduino:mbed_nano:nano33ble",
-    "port": "COM11",
+    "port": "COM12",
     "sketch": "nano_ble33_sense_microphone_continuous.ino"
 }

@@ -28,7 +28,7 @@
  * with slices per model window set to 4. Results in a slice size of 250 ms.
  * For more info: https://docs.edgeimpulse.com/docs/continuous-audio-sampling
  */
-#define EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW 1
+#define EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW 4
 
 /*
  ** NOTE: If you run into TFLite arena allocation issue.
@@ -49,6 +49,12 @@
 #include "mbed.h"
 #include <PDM.h>
 #include <cough-monitor-audio_Created_by_Eivind_Holt__inferencing.h>
+#include <ArduinoBLE.h>
+
+const char* uuidOfService = "00001101-0000-1000-8000-00805f9b34fb";
+const char* uuidOfTxChar = "00001143-0000-1000-8000-00805f9b34fb";
+BLEService coughService(uuidOfService);
+BLEUnsignedIntCharacteristic coughCounterCharacteristic(uuidOfTxChar, BLERead | BLENotify | BLEBroadcast);
 
 /** Audio buffers, pointers and selectors */
 typedef struct {
@@ -66,14 +72,14 @@ static bool debug_nn = false; // Set this to true to see e.g. features generated
 static int print_results = -(EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW);
 static bool test_leds = false; // Set this to true to test the LEDs
 static u_int16_t number_of_coughs = 0;
-static unsigned long cough_led_start_time;
-#define COUGH_LED_DURATION = 1000;
+static unsigned long cough_led_start_time = 0;
+static const u_int16_t COUGH_LED_DURATION = 1000;
 #define ON          0
 #define OFF         1
 #define LEDR        p24
 #define LEDG        p16
 #define LEDB        p6
-#define PROBABILITY_THR 0.9
+#define PROBABILITY_THR 0.5
 
 static mbed::DigitalOut rgb[] = {LEDR, LEDG, LEDB};
 
@@ -129,15 +135,28 @@ void setup()
         ei_printf("ERR: Failed to setup audio sampling\r\n");
         return;
     }
+
+    if (!BLE.begin()) {
+        ei_printf("starting BLE failed!");
+        while (1);
+    }
+
+    BLE.setLocalName("CoughMonitor");
+    BLE.setAdvertisedService(coughService); // add the service UUID
+    coughService.addCharacteristic(coughCounterCharacteristic); // add the cough counter characteristic
+    BLE.addService(coughService); // Add the cough service
+    BLE.setEventHandler(BLEConnected, blePeripheralConnectHandler);
+    BLE.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
+    coughCounterCharacteristic.writeValue(0); // set initial value for this characteristic
+    BLE.advertise();
+    ei_printf("Bluetooth® device active, waiting for connections...");
 }
 
-/**
- * @brief      Arduino main function. Runs the inferencing loop.
- */
 void loop()
 {
+    BLE.poll();
     unsigned long currentMillis = millis();
-    if (cough_led_start_time + COUGH_LED_DURATION > currentMillis){
+    if ((cough_led_start_time + COUGH_LED_DURATION) < currentMillis){
         rgb[current_color] = OFF;
     }
     
@@ -158,53 +177,50 @@ void loop()
         return;
     }
 
-    // Get the index with higher probability
-    size_t ix_max = 0;
-    float  pb_max = 0;
-    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-        if(result.classification[ix].value > pb_max) {
-        ix_max = ix;
-        pb_max = result.classification[ix].value;
-        }
-    }
-
-  if(pb_max > PROBABILITY_THR) {
-    if(is_cough(ix_max)) {
+    if (++print_results >= (EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW))
+    {
+        // print the predictions
         ei_printf("Predictions ");
         ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
-                result.timing.dsp, result.timing.classification, result.timing.anomaly);
+                  result.timing.dsp, result.timing.classification, result.timing.anomaly);
         ei_printf(": \n");
 
-        ei_printf("    %s: %.2f\n", result.classification[0].label,
-            result.classification[0].value);
-        number_of_coughs++;
-        ei_printf("# coughs: %d\n", number_of_coughs);
+        // Get the index with higher probability
+        size_t ix_max = 0;
+        float  pb_max = 0;
+        for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+            ei_printf("    %s: %.2f\n", result.classification[ix].label,
+                result.classification[ix].value);
 
-        cough_led_start_time = millis();
-        rgb[current_color] = ON;
+            if(result.classification[ix].value > pb_max) {
+                ix_max = ix;
+                pb_max = result.classification[ix].value;
+            }
+        }
+
+    if(pb_max > PROBABILITY_THR) {
+        if(is_cough(ix_max)) {
+            /* ei_printf("Predictions ");
+            ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
+                    result.timing.dsp, result.timing.classification, result.timing.anomaly);
+            ei_printf(": \n");
+
+            ei_printf("    %s: %.2f\n", result.classification[0].label,
+                result.classification[0].value); */
+            updateCoughCounter();
+
+            cough_led_start_time = millis();
+            rgb[current_color] = ON;
+        }
+
+        #if EI_CLASSIFIER_HAS_ANOMALY == 1
+                ei_printf("    anomaly score: %.3f\n", result.anomaly);
+        #endif
+
+        print_results = 0;
+        record_ready = true;
+        }
     }
-
-    record_ready = true;
-  }
-
-//     if (++print_results >= (EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW))
-//     {
-//         // print the predictions
-//         ei_printf("Predictions ");
-//         ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
-//                   result.timing.dsp, result.timing.classification, result.timing.anomaly);
-//         ei_printf(": \n");
-//         for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++)
-//         {
-//             ei_printf("    %s: %.2f\n", result.classification[ix].label,
-//                       result.classification[ix].value);
-//         }
-// #if EI_CLASSIFIER_HAS_ANOMALY == 1
-//         ei_printf("    anomaly score: %.3f\n", result.anomaly);
-// #endif
-
-//         print_results = 0;
-//     }
 }
 
 /**
@@ -279,7 +295,7 @@ static bool microphone_inference_start(uint32_t n_samples)
     }
 
     // set the gain, defaults to 20
-    PDM.setGain(127);
+    PDM.setGain(127); //127
 
     record_ready = true;
 
@@ -335,3 +351,18 @@ static void microphone_inference_end(void)
 #if !defined(EI_CLASSIFIER_SENSOR) || EI_CLASSIFIER_SENSOR != EI_CLASSIFIER_SENSOR_MICROPHONE
 #error "Invalid model for current sensor."
 #endif
+
+void updateCoughCounter() {
+    coughCounterCharacteristic.writeValue(++number_of_coughs);  // and update the cough counter characteristic
+    ei_printf("Cough count: %d\n", number_of_coughs); // print it
+}
+
+void blePeripheralConnectHandler(BLEDevice central) {
+  // central connected event handler
+  ei_printf("Connected event, central: %s+n", central.address());
+}
+
+void blePeripheralDisconnectHandler(BLEDevice central) {
+  // central disconnected event handler
+  ei_printf("Disconnected event, central: %s\n", central.address());
+}
