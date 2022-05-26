@@ -28,7 +28,7 @@
  * with slices per model window set to 4. Results in a slice size of 250 ms.
  * For more info: https://docs.edgeimpulse.com/docs/continuous-audio-sampling
  */
-#define EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW 4
+#define EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW 3
 
 /*
  ** NOTE: If you run into TFLite arena allocation issue.
@@ -73,7 +73,7 @@ static int print_results = -(EI_CLASSIFIER_SLICES_PER_MODEL_WINDOW);
 static bool test_leds = false; // Set this to true to test the LEDs
 static u_int16_t number_of_coughs = 0;
 static unsigned long cough_led_start_time = 0;
-static const u_int16_t COUGH_LED_DURATION = 1000;
+static const u_int16_t COUGH_LED_DURATION = 500;
 #define ON          0
 #define OFF         1
 #define LEDR        p24
@@ -97,7 +97,8 @@ static bool is_cough(size_t ix) {
 void setup()
 {
     Serial.begin(115200);
-    while (!Serial);
+    waitForSerial(3000);
+    Serial1.begin(115200);
     ei_printf("ei-cough-monitor-audio-(created-by-eivind-holt)-arduino-1.0.5");
 
     rgb[0] = OFF;
@@ -154,6 +155,7 @@ void setup()
 
 void loop()
 {
+    disableUnusedComponents();
     BLE.poll();
     unsigned long currentMillis = millis();
     if ((cough_led_start_time + COUGH_LED_DURATION) < currentMillis){
@@ -221,6 +223,20 @@ void loop()
         record_ready = true;
         }
     }
+}
+
+void waitForSerial(unsigned long timeout_millis) {
+  unsigned long start = millis();
+  while (!Serial) {
+    if (millis() - start > timeout_millis)
+      break;
+  }
+}
+
+void disableUnusedComponents() {
+    digitalWrite(LED_PWR, LOW); // Disable power led after setup
+    digitalWrite(PIN_ENABLE_I2C_PULLUP, LOW);     //Turn off the I2C pull-up resistors
+    //digitalWrite(PIN_ENABLE_SENSORS_3V3, LOW); // Disable sensors
 }
 
 /**
@@ -355,11 +371,14 @@ static void microphone_inference_end(void)
 void updateCoughCounter() {
     coughCounterCharacteristic.writeValue(++number_of_coughs);  // and update the cough counter characteristic
     ei_printf("Cough count: %d\n", number_of_coughs); // print it
+    Serial1.print("Cough count: ");
+    Serial1.println(number_of_coughs);
 }
 
 void blePeripheralConnectHandler(BLEDevice central) {
   // central connected event handler
   ei_printf("Connected event, central: %s+n", central.address());
+  coughCounterCharacteristic.broadcast();// .writeValue(number_of_coughs);
 }
 
 void blePeripheralDisconnectHandler(BLEDevice central) {
